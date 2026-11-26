@@ -1,0 +1,63 @@
+name: Suivi GAN
+on:
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pdfplumber
+      - name: Chercher un nouveau GAN et notifier
+        env:
+          CARTES: ${{ secrets.CARTES }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          python - <<'PYEOF'
+          import io, json, os, re, sys, zipfile, urllib.request, urllib.error
+          import pdfplumber
+
+          URL = "https://gan.shom.fr/diffusion/INTERNET/gan_telechargeable/{a}/{g}/{g}.zip"
+          DEFAUT = 2647  # dernier GAN déjà appliqué
+          SPEC = {"Pub.": "Nouvelle publication", "Édit.": "NOUVELLE ÉDITION : remplacer la carte", "Sup.": "Carte supprimée"}
+
+          def suivant(g):
+              a, s = divmod(g, 100)
+              return g + 1 if s < 52 else (a + 1) * 100 + 1
+
+          def lire_recap(f, an):
+              res = {}
+              with pdfplumber.open(f) as pdf:
+                  for page in pdf.pages:
+                      mots = page.extract_words()
+                      ent = [w["top"] for w in mots if w["text"] == "Carte"]
+                      seuil = min(ent) + 6 if ent else 0
+                      for g in range(4):
+                          x0, x1 = 35 + g * 132 - 3, 35 + (g + 1) * 132 - 3
+                          col = sorted((w for w in mots if x0 <= w["x0"] < x1 and w["top"] > seuil),
+                                       key=lambda w: (round(w["top"] / 3), w["x0"]))
+                          lignes, cur, dern = [], [], None
+                          for w in col:
+                              t = round(w["top"] / 3)
+                              if dern is not None and t != dern:
+                                  lignes.append(cur); cur = []
+                              cur.append(w); dern = t
+                          if cur: lignes.append(cur)
+                          carte = None
+                          for ln in lignes:
+                              tk = [w["text"] for w in sorted(ln, key=lambda w: w["x0"])]
+                              tk = [t for t in tk if not t.startswith("(INT") and not re.fullmatch(r"\d+\)", t)]
+                              if tk and re.fullmatch(r"\d{4,5}[A-Z]?", tk[0]):
+                                  carte, tk = tk[0], tk[1:]
+                              if not tk or carte is None: continue
+                              corr, reste = tk[0], tk[1:]
+                              if (re.fullmatch(r"\d{1,3}", corr) or corr in SPEC) and reste and re.fullmatch(r"\d{2}", reste[0]):
+                                  res.setdefault(carte, []).append({"corr": corr, "sem": int(reste[0]),
+                                                                    "avis": reste[1] if len(reste) > 1 else ""})
+              return res
