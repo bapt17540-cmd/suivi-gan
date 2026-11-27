@@ -1,0 +1,119 @@
+import io, json, os, re, sys, zipfile, datetime, urllib.request, urllib.error
+import pdfplumber
+
+URL = "https://gan.shom.fr/diffusion/INTERNET/gan_telechargeable/{a}/{g}/{g}.zip"
+DEFAUT = 2647  # dernier GAN déjà appliqué
+SPEC = {"Pub.": "Nouvelle publication", "Édit.": "NOUVELLE ÉDITION : remplacer la carte", "Sup.": "Carte supprimée"}
+
+def suivant(g):
+    a, s = divmod(g, 100)
+    return g + 1 if s < 52 else (a + 1) * 100 + 1
+
+def lire_recap(f, an):
+    res = {}
+    with pdfplumber.open(f) as pdf:
+        for page in pdf.pages:
+            mots = page.extract_words()
+            ent = [w["top"] for w in mots if w["text"] == "Carte"]
+            seuil = min(ent) + 6 if ent else 0
+            for g in range(4):
+                x0, x1 = 35 + g * 132 - 3, 35 + (g + 1) * 132 - 3
+                col = sorted((w for w in mots if x0 <= w["x0"] < x1 and w["top"] > seuil),
+                             key=lambda w: (round(w["top"] / 3), w["x0"]))
+                lignes, cur, dern = [], [], None
+                for w in col:
+                    t = round(w["top"] / 3)
+                    if dern is not None and t != dern:
+                        lignes.append(cur); cur = []
+                    cur.append(w); dern = t
+                if cur: lignes.append(cur)
+                carte = None
+                for ln in lignes:
+                    tk = [w["text"] for w in sorted(ln, key=lambda w: w["x0"])]
+                    tk = [t for t in tk if not t.startswith("(INT") and not re.fullmatch(r"\d+\)", t)]
+                    if tk and re.fullmatch(r"\d{4,5}[A-Z]?", tk[0]):
+                        carte, tk = tk[0], tk[1:]
+                    if not tk or carte is None: continue
+                    corr, reste = tk[0], tk[1:]
+                    if (re.fullmatch(r"\d{1,3}", corr) or corr in SPEC) and reste and re.fullmatch(r"\d{2}", reste[0]):
+                        res.setdefault(carte, []).append({"corr": corr, "sem": int(reste[0]),
+                                                          "avis": reste[1] if len(reste) > 1 else ""})
+    return res
+
+def lire_g(f, sem):
+    g = set()
+    m = re.compile(r"(?<!\d)(\d{4,5}[A-Z]?)(?: \(INT \d+\))?\s+(\d{1,3})\s?G\s+(\d{2})\s+\d{1,3}(?!\d)")
+    with pdfplumber.open(f) as pdf:
+        for p in pdf.pages:
+            for x in m.finditer(p.extract_text() or ""):
+                if int(x.group(3)) == sem: g.add((x.group(1), x.group(2)))
+    return g
+
+def telecharger(url):
+    try:
+        b = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "suivi-gan"}), timeout=60).read()
+        return b if b[:2] == b"PK" else None
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 404): return None
+        raise
+
+def envoyer(topic, titre, texte, urgent):
+    corps = {"topic": topic, "title": titre, "message": texte, "priority": 4 if urgent else 3, "tags": ["ship"]}
+    req = urllib.request.Request("https://ntfy.sh/", json.dumps(corps).encode(), {"Content-Type": "application/json"})
+    urllib.request.urlopen(req, timeout=30).read()
+
+
+def construire(b, gan, ancien):
+    z = zipfile.ZipFile(io.BytesIO(b)); noms = z.namelist()
+    rec = lire_recap(io.BytesIO(z.read(next(n for n in noms if n.endswith("Tables_recapitulatives.pdf")))), gan // 100)
+    gp = next((n for n in noms if n.endswith("_gan.pdf")), None)
+    gg = lire_g(io.BytesIO(z.read(gp)), gan % 100) if gp else set()
+    vus = {(c, e["corr"], e["gan"]) for c, l in ancien.get("corrections", {}).items() for e in l if e.get("g")}
+    corr = {}
+    for c, l in rec.items():
+        corr[c] = []
+        for e in l:
+            n = {"corr": e["corr"], "gan": gan // 100 * 100 + e["sem"], "avis": e["avis"]}
+            if (c, e["corr"], n["gan"]) in vus or (n["gan"] == gan and (c, e["corr"]) in gg): n["g"] = True
+            corr[c].append(n)
+    return rec, gg, corr
+
+OUT = os.environ.get("GAN_OUT", ".")
+f_data, f_etat = os.path.join(OUT, "corrections.json"), os.path.join(OUT, "etat.json")
+data = json.load(open(f_data)) if os.path.exists(f_data) else {}
+etat = json.load(open(f_etat))["dernier_gan"] if os.path.exists(f_etat) else DEFAUT
+topic = os.environ.get("NTFY_TOPIC", "")
+cartes = []
+for l in os.environ.get("CARTES", "").splitlines():
+    p = [x.strip() for x in l.split(";")]
+    if len(p) >= 3 and p[2].isdigit(): cartes.append({"ch": p[0], "emp": p[1], "carte": p[2], "rep": p[3] if len(p) > 3 else ""})
+a_faire, g = [], suivant(etat)
+if os.environ.get("GAN_ZIP"):
+    g = int(os.environ["GAN_ZIP_GAN"]); a_faire = [(g, open(os.environ["GAN_ZIP"], "rb").read())]
+else:
+    while (b := telecharger(URL.format(a=2000 + g // 100, g=g))) is not None:
+        a_faire.append((g, b)); g = suivant(g)
+if not a_faire: print("Aucun nouveau GAN.")
+for gan, b in a_faire:
+    rec, gg, corr = construire(b, gan, data)
+    n = 0
+    for c in cartes:
+        ev = [e for e in rec.get(c["carte"], []) if e["sem"] == gan % 100]
+        if not ev: continue
+        n += 1
+        spec = [SPEC[e["corr"]] for e in ev if e["corr"] in SPEC]
+        cor = ", ".join(e["corr"] + ("G" if (c["carte"], e["corr"]) in gg else "") for e in ev if e["corr"] not in SPEC)
+        avis = ", ".join(f"{gan % 100:02d}{e['avis']}" for e in ev if e["avis"])
+        txt = " · ".join(spec + ([f"Correction {cor}" + (f" (avis {avis})" if avis else "")] if cor else []))
+        titre = f"Chemise {c['ch']} · {c['emp']} — carte {c['carte']}" + (f" ({c['rep']})" if c["rep"] else "")
+        print("→", titre, "|", txt, "| GAN", gan)
+        if topic: envoyer(topic, titre, f"{txt} — GAN {gan}", bool(spec))
+    print(f"GAN {gan} : {n} carte(s) impactée(s) sur {len(cartes)}")
+    data, etat = {"gan": gan, "corrections": corr}, gan
+if not data.get("corrections"):  # première exécution : reconstruit les données du dernier GAN connu
+    b = telecharger(URL.format(a=2000 + etat // 100, g=etat))
+    if b: data = {"gan": etat, "corrections": construire(b, etat, {})[2]}
+data["scan"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+json.dump(data, open(f_data, "w"), ensure_ascii=False, separators=(",", ":"))
+json.dump({"dernier_gan": etat}, open(f_etat, "w"))
+print("Scan enregistré :", data["scan"], "· dernier GAN", data.get("gan"))

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b3d5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Suivi GAN</title>
+<style>
+:root{--bg:#f6fafb;--card:#fff;--tx:#12232e;--mu:#5a6b77;--ln:#d3dfe5;--hd:#0b3d5c;--sh:#d3e8ef;
+--ok:#1f7a5a;--n:#1c64b8;--w1:#a85f00;--w2:#b0207a;--w3:#6e0f4b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0)}
+@media(prefers-color-scheme:dark){:root{--bg:#0e171d;--card:#16222b;--tx:#e6eef2;--mu:#93a4b0;--ln:#2a3a46;--hd:#0b3d5c;--sh:#173441;
+--ok:#4cc29a;--n:#6aa9f0;--w1:#f0a640;--w2:#ff6fb8;--w3:#ff4d9a}}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,sans-serif;padding-bottom:env(safe-area-inset-bottom,0)}
+header{background:var(--hd);color:#fff;padding:14px 16px 12px}
+h1{margin:0;font:600 1.2rem/1.2 Georgia,serif;letter-spacing:.01em}
+.scan{margin:0;padding:10px 16px;background:var(--sh);border-bottom:3px solid var(--hd);font-size:.9rem}
+.scan span{color:var(--mu)}
+.scan.bad{background:var(--w2);color:#fff;border-color:var(--w3)}.scan.bad span{color:#fff}
+nav{display:flex;gap:6px;padding:10px 12px 0;max-width:640px;margin:auto}
+nav button{flex:1;padding:10px 4px;border:1px solid var(--ln);border-radius:8px;background:var(--card);color:var(--tx);font:inherit;font-weight:600;cursor:pointer}
+nav button.on{background:var(--hd);color:#fff;border-color:var(--hd)}
+main{padding:8px 12px 24px;max-width:640px;margin:auto}
+h2{font:600 1.02rem Georgia,serif;margin:20px 2px 8px;color:var(--hd)}
+@media(prefers-color-scheme:dark){h2{color:var(--sh)}}
+.row{background:var(--card);border:1px solid var(--ln);border-radius:10px;margin-bottom:7px;overflow:hidden}
+.top{display:flex;align-items:center;gap:10px;padding:12px;width:100%;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.emp{font-size:.8rem;color:var(--mu);min-width:2.8rem}
+.num{font-weight:700;font-size:1.05rem;flex:1}
+.rep{font-size:.75rem;color:var(--ok);border:1px solid var(--ok);border-radius:5px;padding:0 5px;margin-left:6px;font-weight:500}
+.b{font-size:.78rem;font-weight:600;color:#fff;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.b.ok{background:var(--ok)}.b.n{background:var(--n)}.b.w1{background:var(--w1)}.b.w2{background:var(--w2)}.b.w3{background:var(--w3)}
+.det{display:none;padding:0 12px 12px;border-top:1px solid var(--ln)}
+.row.open .det{display:block}
+.det ul{margin:10px 0;padding-left:18px}
+button.act{width:100%;padding:12px;border:0;border-radius:9px;background:var(--hd);color:#fff;font:inherit;font-weight:600;cursor:pointer;margin-top:6px}
+button.ok2{background:var(--ok)}
+button.sec{background:none;border:1px solid var(--ln);color:var(--mu);border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer;margin:6px 4px 0 0}
+input,textarea{width:100%;font:inherit;background:var(--card);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:9px;margin-bottom:6px}
+textarea{height:110px;font:13px monospace}
+.vide,.note{color:var(--mu);font-size:.9rem;margin:4px 2px}
+.fiche h3{margin:8px 0 4px;font:600 1.05rem Georgia,serif;text-decoration:underline}
+.box{border:2px solid var(--tx);text-align:center;font:700 1.5rem Georgia,serif;padding:8px;margin:8px 0}
+.nav2{display:flex;align-items:center;justify-content:space-between}
+.nav2 button{border:1px solid var(--ln);background:var(--card);color:var(--tx);border-radius:8px;padding:8px 16px;font:inherit;cursor:pointer}
+.qui{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;font-size:.9rem;margin:8px 0}
+.qui input,.tab input{border:0;border-bottom:1px solid var(--ln);border-radius:0;margin:0;padding:3px;background:transparent;font-size:.85rem}
+.tw{overflow-x:auto}
+.tab{border-collapse:collapse;min-width:620px;width:100%;font-size:.8rem}
+.tab th,.tab td{border:1px solid var(--mu);padding:5px 6px;text-align:center}
+.tab th{background:var(--sh)}
+.sec{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 4px;font-weight:700}
+.chip{border:1px solid var(--ln);background:var(--card);color:var(--mu);border-radius:6px;padding:3px 10px;font:inherit;font-size:.8rem;cursor:pointer}
+.chip.n{background:#ffe600;color:#000;border-color:#ffe600;font-weight:700}
+.li{display:flex;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid var(--ln)}.li b{flex:1}
+@media print{header,.scan,nav,.nav2 button,.chip:not(.n),.noprint{display:none!important}body{background:#fff;color:#000}.tab th,.tab td{border-color:#000}}
+</style>
+</head>
+<body>
+<header><h1>Suivi des corrections GAN</h1></header>
+<p class="scan" id="scan">Chargement…</p>
+<nav><button id="t-suivi" class="on">Suivi</button><button id="t-fiche">Fiche GAN</button><button id="t-cartes">Mes cartes</button></nav>
+<main id="app"></main>
+<script>
+const CFG = { API: "", VAPID: "" }; // notifications : adresse du service et clé publique (à renseigner)
+const K = "suiviGAN.v1";
+let D = null, V = "suivi", NV = 0;
+let S = { cartes: [], faites: {}, nom: "", verif: "", neant: {}, champs: {}, notif: false, ajg: 0 };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pad = n => String(n).padStart(2, "0");
+const sem = g => Math.floor(g / 100) * 52 + (g % 100);
+const dm = d => d ? d.slice(8) + "/" + d.slice(5, 7) : "";
+const nat = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
+
+function charger() { try { const v = localStorage.getItem(K); if (v) S = Object.assign(S, JSON.parse(v)); } catch (e) {} S.cartes.forEach(c => c.chemise = String(c.chemise)); }
+function sauver() { try { localStorage.setItem(K, JSON.stringify(S)); } catch (e) {} }
+
+function ligneScan() {
+  const el = document.getElementById("scan");
+  if (!D) { el.className = "scan bad"; el.textContent = "Données indisponibles : vérifie ta connexion."; return; }
+  const sc = D.scan ? new Date(D.scan) : null, j = sc ? Math.floor((Date.now() - sc) / 864e5) : 0;
+  const quand = sc ? sc.toLocaleDateString("fr-FR") + " à " + sc.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "date inconnue";
+  el.className = "scan" + (j > 2 ? " bad" : "");
+  el.innerHTML = `<b>Dernier GAN scanné : n° ${D.gan}</b> (semaine ${pad(D.gan % 100)}/${pad(Math.floor(D.gan / 100))})<br><span>Vérifié le ${quand}</span>` +
+    (j > 2 ? `<br><b>Aucun scan depuis ${j} jours : le robot est peut-être arrêté.</b>` : "");
+}
+
+function statut(c) {
+  const base = (S.faites[c.carte] && S.faites[c.carte].gan) || c.a_jour_au || 0;
+  const att = (D.corrections[c.carte] || []).filter(e => e.gan > base);
+  if (!att.length) return { att, k: "ok", t: "À jour", r: -1 };
+  const r = sem(D.gan) - sem(Math.min(...att.map(e => e.gan)));
+  const e = r <= 0 ? ["n", "Nouvelle"] : r === 1 ? ["w1", "1 GAN de retard"] : r === 2 ? ["w2", "Dernier délai"] : ["w3", "Hors délai"];
+  return { att, k: e[0], t: e[1], r };
+}
+
+function ligne(c, s, p) {
+  const lib = e => ({ "Édit.": "Nouvelle édition : remplacer la carte", "Sup.": "Carte supprimée", "Pub.": "Nouvelle publication" }[e.corr]
+    || `Correction n° ${e.corr}${e.g ? "G" : ""}`) + ` — GAN ${e.gan}` + (e.avis ? `, avis ${pad(e.gan % 100)}${e.avis}` : "");
+  return `<div class="row" id="${p}${c.carte}"><button class="top" data-o="${c.carte}">
+    <span class="emp">${esc(c.emplacement || "")}</span>
+    <span class="num">${c.carte}${c.repere ? `<span class="rep">${esc(c.repere)}</span>` : ""}</span>
+    <span class="b ${s.k}">${s.t}</span></button>
+    <div class="det">${s.att.length ? `<ul>${s.att.map(e => `<li>${lib(e)}</li>`).join("")}</ul><button class="act ok2" data-f="${c.carte}">Corrigée ✓</button>`
+      : `<p class="vide">Aucune correction en attente.</p>`}
+      ${S.faites[c.carte] ? `<button class="sec" data-u="${c.carte}">Annuler « corrigée »</button>` : ""}</div></div>`;
+}
+
+function vueSuivi() {
+  const st = S.cartes.map(c => [c, statut(c)]).sort((a, b) => nat(a[0].emplacement, b[0].emplacement));
+  const af = st.filter(([, s]) => s.r >= 0).sort((a, b) => b[1].r - a[1].r);
+  let h = `<h2>À corriger (${af.length})</h2>` + (af.length ? af.map(([c, s]) => ligne(c, s, "c")).join("") : `<p class="vide">Tout est à jour.</p>`);
+  [...new Set(S.cartes.map(c => c.chemise))].sort(nat).forEach(ch => {
+    h += `<h2>Chemise ${esc(ch)}</h2>` + st.filter(([c]) => c.chemise === ch).map(([c, s]) => ligne(c, s, "l")).join("");
+  });
+  return h;
+}
+
+const SECTIONS = ["Instructions nautiques", "Autres ouvrages", "Avis spéciaux", "Modifications aux collections"];
+function vueFiche() {
+  const n = NV || D.gan, an = Math.floor(n / 100), L = [];
+  S.cartes.forEach(c => (D.corrections[c.carte] || []).filter(e => e.gan === n).forEach(e => {
+    const f = S.faites[c.carte];
+    L.push({ c, e, avis: pad(n % 100) + e.avis, fait: !!(f && f.gan >= n), f });
+  }));
+  L.sort((a, b) => (+a.avis || 0) - (+b.avis || 0) || nat(a.c.carte, b.c.carte));
+  const inp = k => `<input data-k="${k}" value="${esc(S.champs[k] || "")}">`;
+  let h = `<div class="fiche"><h3>Tableau d’enregistrement des GAN</h3><div class="box">GAN ${pad(n % 100)}/${pad(an)}</div>
+    <div class="nav2 noprint"><button data-p="-1">◀</button><span>${n === D.gan ? "Dernier GAN" : "GAN " + n}</span><button data-p="1">▶</button></div>
+    <div class="qui"><span>Enregistré par :</span><input id="nom" value="${esc(S.nom)}"><span>Vérifié par :</span><input id="ver" value="${esc(S.verif)}"></div>
+    <div class="sec"><span>➔ Cartes :</span></div><div class="tw"><table class="tab">
+    <tr><th>Chemise</th><th>Carte</th><th>Avis</th><th>Correction</th><th>Date</th><th>Correcteur</th><th>Vérificateur</th><th>Observations</th></tr>`;
+  h += L.length ? L.map(r => { const k = n + "|" + r.c.carte + "|" + r.e.corr;
+    return `<tr><td>${esc(r.c.chemise)}</td><td><b>${r.c.carte}</b></td><td>${r.avis}</td><td>${r.e.corr}${r.e.g ? "G" : ""}</td>
+      <td>${r.fait ? dm(r.f.date) : (r.c.a_jour_au >= n ? "fait" : "")}</td><td>${r.fait ? esc(r.f.par || "") : ""}</td><td>${inp(k + "|v")}</td><td>${inp(k + "|o")}</td></tr>`; }).join("")
+    : `<tr><td colspan="8"><span class="chip n">NÉANT</span></td></tr>`;
+  h += `</table></div>`;
+  SECTIONS.forEach((t, i) => { const k = n + "|" + i, v = S.neant[k];
+    h += `<div class="sec"><span>➔ ${t} :</span><button class="chip ${v ? "n" : ""}" data-n="${k}">${v ? "NÉANT" : "À renseigner"}</button></div>`; });
+  return h + `<p class="note noprint">Les sections hors cartes se renseignent à la main : l’appli ne les contrôle pas.</p>
+    <button class="sec chip noprint" onclick="window.print()">Imprimer / PDF</button></div>`;
+}
+
+function vueCartes() {
+  const ios = /iphone|ipad/i.test(navigator.userAgent) && !navigator.standalone;
+  let h = `<h2>Ajouter une carte</h2>
+    <input id="fc" placeholder="N° de carte (ex. 7205)" inputmode="numeric"><input id="fch" placeholder="Chemise (ex. 80)" value="${esc(S.cartes.length ? S.cartes[S.cartes.length - 1].chemise : "")}">
+    <input id="fe" placeholder="Emplacement (ex. 2-10)"><input id="fr" placeholder="Repère (facultatif)">
+    <input id="fg" inputmode="numeric" value="${S.ajg || D.gan}" aria-label="À jour jusqu’au GAN">
+    <p class="note">La dernière case : ta carte est à jour jusqu’à ce GAN. Les corrections plus récentes apparaîtront comme à faire.</p>
+    <button class="act" data-add>Ajouter la carte</button>
+    <h2>Coller une liste</h2><p class="note">Une carte par ligne : chemise;emplacement;carte;repère</p>
+    <textarea id="bulk" placeholder="80;2-10;7205;"></textarea><button class="act" data-bulk>Importer la liste</button>
+    <h2>Mes cartes (${S.cartes.length})</h2>`;
+  h += S.cartes.length ? [...S.cartes].sort((a, b) => nat(a.chemise, b.chemise) || nat(a.emplacement, b.emplacement)).map(c =>
+    `<div class="li"><span class="emp">${esc(c.chemise)} · ${esc(c.emplacement || "")}</span><b>${c.carte}${c.repere ? " (" + esc(c.repere) + ")" : ""}</b><button class="sec" data-del="${c.carte}">Retirer</button></div>`).join("")
+    : `<p class="vide">Aucune carte : ajoute la première ci-dessus.</p>`;
+  h += `<h2>Notifications</h2><p class="note">Tes cartes restent sur ce téléphone.${CFG.API ? " Si tu actives les notifications, leurs numéros (sans nom) sont transmis au service qui t’alerte." : ""}</p>`;
+  if (!CFG.API) h += `<p class="note">Les notifications ne sont pas activées sur cette installation.</p>`;
+  else {
+    if (ios) h += `<p class="note">Sur iPhone : touche Partager, puis « Sur l’écran d’accueil », ouvre l’appli depuis son icône, puis reviens ici.</p>`;
+    h += S.notif ? `<p class="note">Notifications actives ✓</p>` : `<button class="act" data-notif>Activer les notifications</button>`;
+  }
+  return h + `<button class="sec" data-rst>Effacer mes cartes et mes validations</button>`;
+}
+
+function afficher() {
+  ligneScan();
+  const app = document.getElementById("app");
+  if (!D) { app.innerHTML = ""; return; }
+  if (!S.cartes.length) V = "cartes";
+  ["suivi", "fiche", "cartes"].forEach(v => document.getElementById("t-" + v).classList.toggle("on", v === V));
+  app.innerHTML = V === "fiche" ? vueFiche() : V === "cartes" ? vueCartes() : vueSuivi();
+  const h = location.hash.slice(1);
+  if (V === "suivi" && h) { const el = document.getElementById("c" + h) || document.getElementById("l" + h); if (el) { el.classList.add("open"); el.scrollIntoView(); } }
+}
+
+function ajouter(c) {
+  S.cartes = S.cartes.filter(x => x.carte !== c.carte); S.cartes.push(c);
+}
+function lireListe(t) {
+  t = t.trim(); if (!t) return [];
+  if (t[0] === "[") { try { return JSON.parse(t).map(x => ({ carte: String(x.carte), chemise: String(x.chemise), emplacement: x.emplacement || "", repere: x.repere || "", a_jour_au: x.a_jour_au || D.gan })); } catch (e) { return []; } }
+  return t.split(/\r?\n/).map(l => l.split(";").map(x => x.trim())).filter(p => /^\d{4,5}[A-Z]?$/.test(p[2] || ""))
+    .map(p => ({ chemise: p[0], emplacement: p[1], carte: p[2], repere: p[3] || "", a_jour_au: S.ajg || D.gan }));
+}
+
+function b64(s) { const p = "=".repeat((4 - s.length % 4) % 4), r = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); }
+async function synchro() {
+  if (!S.notif || !CFG.API) return;
+  try { const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); if (!sub) return;
+    await fetch(CFG.API + "/abonner", { method: "POST", body: JSON.stringify({ sub: sub.toJSON(), cartes: S.cartes.map(c => c.carte) }) }); } catch (e) {}
+}
+async function activerNotifs() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return alert("Ce navigateur ne gère pas les notifications. Sur iPhone, ajoute d’abord l’appli à l’écran d’accueil.");
+  if (await Notification.requestPermission() !== "granted") return alert("Notifications refusées : autorise-les dans les réglages du téléphone.");
+  try { const reg = await navigator.serviceWorker.ready;
+    await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(CFG.VAPID) });
+    S.notif = true; sauver(); await synchro(); afficher(); } catch (e) { alert("Activation impossible : " + e.message); }
+}
+
+document.addEventListener("click", ev => {
+  const t = ev.target.closest("[data-o],[data-f],[data-u],[data-p],[data-n],[data-add],[data-bulk],[data-del],[data-notif],[data-rst]"); if (!t) return;
+  const d = t.dataset, v = id => document.getElementById(id).value.trim();
+  if (d.o !== undefined) { document.querySelectorAll("#c" + d.o + ",#l" + d.o).forEach(r => r.classList.toggle("open")); return; }
+  if (d.p) { const c = (NV || D.gan) + +d.p; if (c <= D.gan && c % 100 >= 1 && c % 100 <= 52 && Math.floor(c / 100) === Math.floor(D.gan / 100)) NV = c === D.gan ? 0 : c; }
+  if (d.n) S.neant[d.n] = !S.neant[d.n];
+  if (d.f) S.faites[d.f] = { gan: D.gan, date: new Date().toISOString().slice(0, 10), par: S.nom };
+  if (d.u) delete S.faites[d.u];
+  if (d.add !== undefined) {
+    if (!/^\d{4,5}[A-Z]?$/.test(v("fc"))) return alert("Numéro de carte invalide : 4 ou 5 chiffres.");
+    if (!v("fch")) return alert("Indique la chemise.");
+    S.ajg = parseInt(v("fg")) || D.gan;
+    ajouter({ carte: v("fc"), chemise: v("fch"), emplacement: v("fe"), repere: v("fr"), a_jour_au: S.ajg }); synchro();
+  }
+  if (d.bulk !== undefined) { S.ajg = parseInt(v("fg")) || D.gan; const L = lireListe(document.getElementById("bulk").value); if (!L.length) return alert("Aucune carte reconnue."); L.forEach(ajouter); synchro(); }
+  if (d.del) { S.cartes = S.cartes.filter(c => c.carte !== d.del); synchro(); }
+  if (d.notif !== undefined) return activerNotifs();
+  if (d.rst !== undefined) { if (!confirm("Effacer toutes tes cartes et validations de ce téléphone ?")) return; S = { cartes: [], faites: {}, nom: "", verif: "", neant: {}, champs: {}, notif: S.notif, ajg: 0 }; }
+  sauver(); afficher();
+});
+document.addEventListener("change", ev => {
+  const t = ev.target;
+  if (t.id === "nom") S.nom = t.value; else if (t.id === "ver") S.verif = t.value; else if (t.dataset.k) S.champs[t.dataset.k] = t.value; else return;
+  sauver();
+});
+["suivi", "fiche", "cartes"].forEach(v => document.getElementById("t-" + v).onclick = () => { V = v; afficher(); });
+
+charger();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+fetch("corrections.json?" + Date.now(), { cache: "no-store" }).then(r => r.json()).then(d => { D = d; afficher(); }).catch(() => { D = null; afficher(); });
+</script>
+</body>
+</html>
